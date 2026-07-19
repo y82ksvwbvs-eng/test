@@ -1,0 +1,161 @@
+const Backup = {
+    b64e: (str) => btoa(unescape(encodeURIComponent(str))),
+    b64d: (str) => decodeURIComponent(escape(atob(str))),
+    validate(obj) {
+        if (!obj || obj.schemaVersion !== CONFIG.SCHEMA_VERSION || !Array.isArray(obj.tasks) || typeof obj.history !== 'object') throw new Error('Invalid format');
+        return true;
+    },
+    exportFile() {
+        try {
+            const blob = new Blob([JSON.stringify(State.data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = `osiris_v3_${Utils.todayStr()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 3000); AudioEngine.play('success'); UI.popToast("BACKUP ESPORTATO.");
+        } catch(e) { AudioEngine.play('error'); UI.popToast("ERRORE ESPORTAZIONE.", true); }
+    },
+    async copyBase64() {
+        try {
+            const code = this.b64e(JSON.stringify(State.data));
+            await navigator.clipboard.writeText(code);
+            AudioEngine.play('success'); UI.popToast("CODICE COPIATO NEGLI APPUNTI.");
+        } catch(e) {
+            $('backup-paste-area').value = this.b64e(JSON.stringify(State.data));
+            $('backup-paste-area').select(); AudioEngine.play('check'); UI.popToast("CODICE SOTTO. COPIA MANUALMENTE.", true);
+        }
+    },
+    importFile(e) {
+        const file = e.target.files && e.target.files[0]; if (!file) return;
+        if (file.size > 5 * 1024 * 1024) return UI.popToast("FILE TROPPO GRANDE.", true);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const obj = JSON.parse(ev.target.result); this.validate(obj);
+                State.data = obj; State.save(); UI.closeBackupModal(); AudioEngine.play('success'); UI.popToast("ARCHIVIO RIPRISTINATO.");
+            } catch(err) { AudioEngine.play('error'); UI.popToast("FILE NON VALIDO.", true); }
+        }; reader.readAsText(file); e.target.value = '';
+    },
+    importBase64() {
+        const code = $('backup-paste-area').value.trim(); if (!code) return UI.popToast("INSERISCI CODICE.", true);
+        try {
+            const obj = JSON.parse(this.b64d(code)); this.validate(obj);
+            State.data = obj; State.save(); UI.closeBackupModal(); AudioEngine.play('success'); UI.popToast("ARCHIVIO RIPRISTINATO.");
+        } catch(err) { AudioEngine.play('error'); UI.popToast("CODICE CORROTTO.", true); }
+    },
+    copyShareURL() { ShareURL.copy(); }
+};
+
+const CanvasExport = {
+    async sharePNG() {
+        AudioEngine.play('process'); Utils.triggerVibe(30);
+        try {
+            const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d');
+            const score = $('verdict-score').innerText, sub = $('verdict-score-sub').innerText, lvlNum = $('level-num').innerText;
+            const lvlName = $('level-name').innerText, grade = $('level-grade').innerText, tag = $('verdict-tag').innerText;
+            const pct = parseInt(score) || 0, isFail = pct < 100 && !tag.includes('MYTHIC') && !tag.includes('GOLD') && !tag.includes('SILVER');
+            const color = tag.includes('MYTHIC') || tag.includes('GOLD') ? '#fbbf24' : (tag.includes('SILVER') ? '#a1a1aa' : (isFail ? '#ff003c' : '#00ff66'));
+
+            ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(0,0,0,0.28)'; for (let y = 0; y < H; y += 6) ctx.fillRect(0, y, W, 3);
+            
+            ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.strokeRect(40, 40, W - 80, H - 80);
+            ctx.lineWidth = 4; [[80,80],[W-80,80],[80,H-80],[W-80,H-80]].forEach(([x,y]) => { ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI*2); ctx.stroke(); });
+            
+            ctx.fillStyle = '#ffffff'; ctx.font = '900 90px "Syncopate", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('OSIRIS.', W/2, 220);
+            ctx.fillStyle = '#71717a'; ctx.font = '700 24px "JetBrains Mono", monospace'; ctx.fillText(tag.length > 55 ? tag.slice(0,55)+'...' : tag, W/2, 280);
+            ctx.strokeStyle = '#27272a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(120, 340); ctx.lineTo(W - 120, 340); ctx.stroke();
+            
+            ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.strokeRect(120, 400, W - 240, 460);
+            ctx.fillStyle = '#71717a'; ctx.font = '700 22px "JetBrains Mono", monospace'; ctx.fillText('INDICE DI SUCCESSO', W/2, 460);
+            ctx.fillStyle = color; ctx.font = '900 280px "Syncopate", sans-serif';
+            if (isFail) { ctx.fillStyle='rgba(255,0,60,0.6)'; ctx.fillText(score, W/2-8, 720); ctx.fillStyle='rgba(0,255,102,0.5)'; ctx.fillText(score, W/2+8, 720); ctx.fillStyle=color; }
+            ctx.fillText(score, W/2, 720);
+            ctx.fillStyle = '#71717a'; ctx.font = '700 24px "JetBrains Mono", monospace'; ctx.fillText(sub, W/2, 820);
+            
+            ctx.strokeStyle = '#27272a'; ctx.lineWidth = 4; ctx.strokeRect(120, 920, W - 240, 320);
+            ctx.fillStyle = '#71717a'; ctx.font = '700 20px "JetBrains Mono", monospace'; ctx.textAlign = 'left'; ctx.fillText('LIVELLO', 160, 980); ctx.textAlign = 'right'; ctx.fillText('GRADO', W - 160, 980);
+            ctx.fillStyle = '#ffffff'; ctx.font = '900 140px "Syncopate", sans-serif'; ctx.textAlign = 'left'; ctx.fillText(lvlNum, 160, 1110);
+            
+            ctx.textAlign = 'right'; ctx.font = '900 32px "Syncopate", sans-serif'; const gm = ctx.measureText(grade);
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.strokeRect(W-160-gm.width-30, 1075, gm.width+30, 50);
+            ctx.fillStyle = '#ffffff'; ctx.fillText(grade, W - 175, 1112);
+            
+            ctx.textAlign = 'center'; ctx.font = '900 38px "JetBrains Mono", monospace'; ctx.fillText(lvlName.slice(0,30), W/2, 1180);
+            ctx.font = '700 20px "JetBrains Mono", monospace'; ctx.fillStyle = '#71717a'; ctx.fillText($('level-tier-label').innerText, W/2, 1220);
+            
+            ctx.beginPath(); ctx.moveTo(120, 1360); ctx.lineTo(W - 120, 1360); ctx.stroke();
+            const dstr = Utils.todayStr().replace(/-/g,'.');
+            ctx.fillStyle = '#71717a'; ctx.font = '700 22px "JetBrains Mono", monospace'; ctx.fillText(`SIGILLATO IL ${dstr}`, W/2, 1440);
+            ctx.fillStyle = '#ffffff'; ctx.font = '900 70px "Syncopate", sans-serif'; ctx.fillText('DOVERE COMPILATO', W/2, 1580);
+            ctx.font = '900 42px "Syncopate", sans-serif'; ctx.fillStyle = color; ctx.fillText('DAL PROTOCOLLO O.S.I.R.I.S.', W/2, 1650);
+            
+            ctx.fillStyle = '#52525b'; ctx.font = '700 18px "JetBrains Mono", monospace'; ctx.fillText('// TERMINALE DI VALUTAZIONE //', W/2, 1780);
+            const idHash = State.data.bestStreak.toString(16).padStart(3,'0').toUpperCase() + '-' + State.data.xp.toString(16).padStart(4,'0').toUpperCase();
+            ctx.fillText(`ID: ${idHash}`, W/2, 1820);
+
+            const blob = await new Promise(r => c.toBlob(r, 'image/png', 0.92));
+            const file = new File([blob], `osiris_verdetto_${dstr}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: 'OSIRIS', text: `Indice ${score} — Livello ${lvlNum}: ${lvlName}.`});
+                AudioEngine.play('success');
+            } else {
+                const u = URL.createObjectURL(blob), a = document.createElement('a');
+                a.href = u; a.download = file.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(u), 5000); AudioEngine.play('check'); UI.popToast("FILE SCARICATO.");
+            }
+        } catch(e) { AudioEngine.play('error'); UI.popToast("ERRORE SIGILLO.", true); }
+    }
+};
+
+const ShareURL = {
+    build() {
+        const payload = {
+            v: CONFIG.SCHEMA_VERSION, t: State.data.tasks, h: State.data.history,
+            s: State.data.streak, bs: State.data.bestStreak, tg: State.data.targetTasks,
+            xp: State.data.xp, pr: State.data.prestige, ac: State.data.achievements,
+            tc: State.data.totalTasksCompleted, tm: State.data.totalTasksMissed,
+            lj: State.data.lastJudged, lbw: State.data.lastBossWeek, bh: State.data.bossHistory,
+            bw: State.data.bossWeek, bd: State.data.bossDmg, bhl: State.data.bossHeal,
+            cf: State.data.confessions
+        };
+        const b64 = Backup.b64e(JSON.stringify(payload));
+        const url = `${location.origin}${location.pathname}#state=${b64}`;
+        return url;
+    },
+    async copy() {
+        try {
+            const u = this.build(); await navigator.clipboard.writeText(u);
+            AudioEngine.play('success'); UI.popToast("URL COPIATO. INCOLLA SU DESKTOP.");
+        } catch(e) {
+            const u = this.build();
+            $('backup-paste-area').value = u; $('backup-paste-area').select();
+            UI.popToast("URL SOTTO — COPIA MANUALMENTE.", true);
+        }
+    },
+    checkOnBoot() {
+        const m = location.hash.match(/#state=([^&]+)/);
+        if (!m) return;
+        try {
+            const payload = JSON.parse(Backup.b64d(m[1]));
+            if (payload.v !== CONFIG.SCHEMA_VERSION) throw new Error('schema');
+            const ok = confirm("Rilevato stato esterno nell'URL.\nSovrascrivere la memoria locale?");
+            if (ok) {
+                State.data = {
+                    schemaVersion: CONFIG.SCHEMA_VERSION,
+                    tasks: payload.t || [], history: payload.h || {},
+                    streak: payload.s || 0, bestStreak: payload.bs || 0,
+                    lastJudged: payload.lj || null, targetTasks: payload.tg || 1,
+                    xp: payload.xp || 0, lastBossWeek: payload.lbw || null, bossHistory: payload.bh || {},
+                    achievements: payload.ac || [], prestige: payload.pr || 0,
+                    totalTasksCompleted: payload.tc || 0, totalTasksMissed: payload.tm || 0,
+                    bossWeek: payload.bw || null, bossDmg: payload.bd || 0, bossHeal: payload.bhl || 0,
+                    confessions: Array.isArray(payload.cf) ? payload.cf : []
+                };
+                localStorage.setItem(CONFIG.STORE_KEY, JSON.stringify(State.data));
+                UI.popToast("STATO IMPORTATO DA URL.");
+            }
+        } catch(e) { UI.popToast("URL CORROTTO. IGNORATO.", true); }
+        finally {
+            history.replaceState(null, '', location.pathname + location.search);
+        }
+    }
+};
