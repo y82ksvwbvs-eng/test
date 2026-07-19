@@ -460,6 +460,18 @@
 <div id="toast-container" class="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-[110] flex flex-col gap-3 sm:gap-4 pointer-events-none"></div>
 
 <!-- Collegamento al nuovo file JS -->
-<script src="app.js"></script>
+<!-- SYSTEM MODULES [CARICAMENTO RIGOROSAMENTE IN ORDINE] -->
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/state.js"></script>
+<script src="js/narrator.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/achievements.js"></script>
+<script src="js/boss.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/statistics.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
